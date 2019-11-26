@@ -20,7 +20,7 @@ echo "Something wrong with writing to $SAVE_DIRECTORY"
 else
 rm $SAVE_DIRECTORY/test_writing_file
 echo "It's ok with writing to $SAVE_DIRECTORY"
-echo `ls /var/www/ | grep ".ru\|.xn--p1ai"`
+echo `ls /var/www/`
 echo "What sites to save?"
 read -a SITES_ARRAY
 #Упаковываем поочередно все сайты из массива
