@@ -1,4 +1,7 @@
 # linux_scripts
+rsync_backup.sh
+It rsync's mounted via CIFS.mount Windows Share skipping RECYCLE.BIN and System Volume Information to chosen $dst. All attributes, mirror copy, deletes files if they were deleted in $src.
+
 DNS_SOA_SCAN.sh
 Script outputs SOA record of specified domain(-s)
 Usage:
