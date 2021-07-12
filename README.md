@@ -22,3 +22,7 @@ Next step script will check for permission to write to selected dir. Then you ju
 
 Script will show all your sites (/var/www), then ask you for directory to save sites or it will create and use default directory (/var/backup/sites_$date). 
 Next step script will check for permission to write to selected dir. Then you just enter site names and script packs it to .tar.gz and shows the result.
+
+**backup_mysql_db.sh**
+
+Script backups MySQL DB and then checks if it did correctly. Success/Fail information writes to the log file. Script removes backups that are corrupted or older thank 24 hours.
