@@ -1,3 +1,0 @@
-#Example lines
-#/var/www/u0738939/data/www/site.ru/234.php
-#/var/www/u0738939/data/www/anothersite.ru/netcat_options/index.php
