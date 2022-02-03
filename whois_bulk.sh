@@ -12,7 +12,9 @@ do
     [[ "$L3" == "" ]] && L3="No City"
     L4=`whois $ip | grep -m 1 'StateProv' | tr -s ' ' | sed 's/StateProv: //g'`
     [[ "$L4" == "" ]] && L4="No State"
-    C="${ip}; ${L1}; ${L2}; ${L3}; ${L4}"
+    L5=`whois $ip | grep -m 1 'role' | tr -s ' ' | sed 's/role: //g'`
+    L6=`whois $ip | grep -m 1 'netname' | tr -s ' ' | sed 's/netname: //g'`
+    C="${ip}; ${L1}; ${L2}; ${L3}; ${L4}; ${L5}; ${L6}"
     echo $C >> result.txt
     #sleep 1
 done
