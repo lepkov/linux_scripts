@@ -1,4 +1,16 @@
 # linux_scripts
+**trigger_GH_Action.sh**
+
+Triggers GH action with workflow_dispatch manual start option. Needed when debugging or developing new Github Action.
+
+**amzn_linux2_install_docker.sh**
+
+Install docker & docker compose to AWS Amazon Linux EC2.
+
+**whois_bulk.sh**
+
+Bulk DNS records parsing from source file to result file. Parsed fields are: IP, OrgName, Country, City, StateProv, role, netname.
+
 **rsync_backup.sh**
 
 It rsync's mounted via CIFS.mount Windows Share skipping RECYCLE.BIN and System Volume Information to chosen $dst. All attributes, mirror copy, deletes files if they were deleted in $src.
