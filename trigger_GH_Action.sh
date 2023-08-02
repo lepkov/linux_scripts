@@ -12,3 +12,5 @@ curl \
   -H "Authorization: token $TOKEN" \
   https://api.github.com/repos/$ORG_OR_USERNAME/$REPO/actions/workflows/$FILENAME_OR_WORKFLOW_ID/dispatches \
   -d '{"ref":"refs/heads/'$BRANCH'"}'
+
+# place push: after workflow_dispatch and make at least 1 push to register a workflow
