@@ -1,96 +1,201 @@
 #!/bin/bash
+# sudo bash ubuntu_os_update.sh
+# sudo bash ubuntu_os_update.sh --release-upgrade
+set -uo pipefail
 
-# Function to check if a command exists
+LOGFILE="/var/log/ubuntu_os_update_$(date +%Y%m%d_%H%M%S).log"
+RELEASE_UPGRADE=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --release-upgrade) RELEASE_UPGRADE=true ;;
+        *) echo "Unknown option: $arg"; exit 1 ;;
+    esac
+done
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+declare -a SUCCESSES=()
+declare -a SKIPPED=()
+declare -a FAILURES=()
+
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo -e "$msg" | tee -a "$LOGFILE" 2>/dev/null
+}
+
+section() {
+    log "${GREEN}==> $1${NC}"
+}
+
+warn() {
+    log "${YELLOW}    [SKIP] $1${NC}"
+}
+
+fail() {
+    log "${RED}    [FAIL] $1${NC}"
+}
+
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Update apt packages
-echo "Updating package list and installed packages..."
-sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt-get dist-upgrade -y
+run_section() {
+    local name="$1"
+    shift
+    section "$name"
+    if "$@"; then
+        SUCCESSES+=("$name")
+    else
+        fail "$name"
+        FAILURES+=("$name")
+    fi
+}
 
-# Remove unnecessary packages
-echo "Cleaning up..."
-sudo apt-get autoremove -y && sudo apt-get autoclean -y
+skip_section() {
+    warn "$1 — $2 not found, skipping."
+    SKIPPED+=("$1")
+}
 
-# Refresh Snap packages (check if snap is installed)
+# --- Pre-flight check ---
+
+if ! sudo -v 2>/dev/null; then
+    echo -e "${RED}Error: sudo access is required. Exiting.${NC}"
+    exit 1
+fi
+
+log "Update started. Log: $LOGFILE"
+
+# --- APT ---
+
+run_section "APT update & upgrade" bash -c \
+    'sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt-get dist-upgrade -y'
+
+run_section "APT cleanup" bash -c \
+    'sudo apt-get autoremove -y && sudo apt-get autoclean -y'
+
+# --- Snap ---
+
 if command_exists snap; then
-    echo "Refreshing Snap packages..."
-    sudo snap refresh
+    run_section "Snap refresh" sudo snap refresh
 else
-    echo "Snap is not installed. Skipping Snap updates."
+    skip_section "Snap refresh" "snap"
 fi
 
-# Update Flatpak packages (check if flatpak is installed)
+# --- Flatpak ---
+
 if command_exists flatpak; then
-    echo "Updating Flatpak packages..."
-    flatpak update -y
+    run_section "Flatpak update" flatpak update -y
 else
-    echo "Flatpak is not installed. Skipping Flatpak updates."
+    skip_section "Flatpak update" "flatpak"
 fi
 
-# Update Python packages (check if pip3 is installed)
-if command_exists pip3; then
-    echo "Updating Python packages..."
-    pip3 install --upgrade pip
-    pip3 list --outdated --format=freeze | cut -d'=' -f1 | xargs -n1 pip3 install --upgrade
-else
-    echo "pip3 is not installed. Skipping Python updates."
-fi
+# --- Firmware ---
 
-# Firmware updates (check if fwupdmgr is installed)
 if command_exists fwupdmgr; then
-    echo "Checking firmware updates..."
-    sudo fwupdmgr refresh && sudo fwupdmgr update
+    run_section "Firmware update" bash -c \
+        'sudo fwupdmgr refresh --force 2>/dev/null; sudo fwupdmgr update -y 2>/dev/null'
 else
-    echo "fwupdmgr is not installed. Skipping firmware updates."
+    skip_section "Firmware update" "fwupdmgr"
 fi
 
-# Update Docker (check if Docker is installed)
+# --- Docker ---
+
 if command_exists docker; then
-    echo "Updating Docker images..."
-    sudo docker system prune -f
-    sudo docker pull $(sudo docker images --format '{{.Repository}}' | sort -u)
+    run_section "Docker prune" sudo docker system prune -f
+
+    section "Docker image pull"
+    mapfile -t images < <(sudo docker images --format '{{.Repository}}:{{.Tag}}' \
+        | grep -v '<none>' | sort -u)
+    if [[ ${#images[@]} -gt 0 ]]; then
+        docker_ok=true
+        for img in "${images[@]}"; do
+            log "    Pulling $img"
+            if ! sudo docker pull "$img"; then
+                fail "Failed to pull $img"
+                docker_ok=false
+            fi
+        done
+        $docker_ok && SUCCESSES+=("Docker image pull") || FAILURES+=("Docker image pull")
+    else
+        warn "No Docker images to update."
+        SKIPPED+=("Docker image pull")
+    fi
 else
-    echo "Docker is not installed. Skipping Docker updates."
+    skip_section "Docker update" "docker"
 fi
 
-# Update Rust (check if rustup is installed)
+# --- Rust ---
+
 if command_exists rustup; then
-    echo "Updating Rust components..."
-    rustup update
+    run_section "Rust update" rustup update
 else
-    echo "Rust is not installed. Skipping Rust updates."
+    skip_section "Rust update" "rustup"
 fi
 
-# Update Node.js and npm (check if npm is installed)
+# --- Node.js / npm ---
+
 if command_exists npm; then
-    echo "Updating Node.js and npm packages..."
-    sudo npm install -g npm && npm update -g
+    run_section "npm global update" bash -c \
+        'sudo npm install -g npm && sudo npm update -g'
 else
-    echo "npm is not installed. Skipping Node.js updates."
+    skip_section "npm global update" "npm"
 fi
 
-# Kernel and GRUB updates
-echo "Rebuilding initramfs and updating GRUB..."
-sudo update-initramfs -u
-sudo update-grub
+# --- Kernel / GRUB (only when the tools exist) ---
 
-# Ubuntu release upgrade
-echo "Checking for new Ubuntu release..."
-if sudo do-release-upgrade -c | grep -q "New release"; then
-    echo "Upgrading to the new Ubuntu release..."
-    sudo do-release-upgrade -f DistUpgradeViewNonInteractive
+if command_exists update-initramfs; then
+    run_section "Rebuild initramfs" sudo update-initramfs -u
 else
-    echo "You are already using the latest Ubuntu release."
+    skip_section "Rebuild initramfs" "update-initramfs"
 fi
 
-# Reboot check
-echo "Checking if reboot is required..."
+if command_exists update-grub; then
+    run_section "Update GRUB" sudo update-grub
+else
+    skip_section "Update GRUB" "update-grub"
+fi
+
+# --- Ubuntu release upgrade (opt-in only) ---
+
+if $RELEASE_UPGRADE; then
+    if command_exists do-release-upgrade; then
+        if sudo do-release-upgrade -c 2>/dev/null | grep -q "New release"; then
+            run_section "Ubuntu release upgrade" \
+                sudo do-release-upgrade -f DistUpgradeViewNonInteractive
+        else
+            log "Already on the latest Ubuntu release."
+            SKIPPED+=("Ubuntu release upgrade")
+        fi
+    else
+        skip_section "Ubuntu release upgrade" "do-release-upgrade"
+    fi
+else
+    log "Release upgrade skipped (pass --release-upgrade to enable)."
+    SKIPPED+=("Ubuntu release upgrade")
+fi
+
+# --- Reboot check ---
+
+echo ""
 if [ -f /var/run/reboot-required ]; then
-    echo "Reboot is required. Please reboot your system."
+    log "${YELLOW}Reboot is required to finish applying updates.${NC}"
 else
-    echo "No reboot required."
+    log "No reboot required."
 fi
 
-echo "System is fully updated!"
+# --- Summary ---
+
+echo ""
+log "${GREEN}===== Update Summary =====${NC}"
+[[ ${#SUCCESSES[@]} -gt 0 ]] && log "${GREEN}  Succeeded: ${SUCCESSES[*]}${NC}"
+[[ ${#SKIPPED[@]}  -gt 0 ]] && log "${YELLOW}  Skipped:   ${SKIPPED[*]}${NC}"
+[[ ${#FAILURES[@]} -gt 0 ]] && log "${RED}  Failed:    ${FAILURES[*]}${NC}"
+echo ""
+log "Full log: $LOGFILE"
+
+[[ ${#FAILURES[@]} -gt 0 ]] && exit 1
+exit 0
