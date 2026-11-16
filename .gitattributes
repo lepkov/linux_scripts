@@ -1,0 +1,4 @@
+# Shell scripts are deployed byte for byte to Linux hosts (sha256 asserted by
+# the Ansible playbooks), so they must keep LF endings even on Windows checkouts.
+*.sh text eol=lf
+.gitattributes text eol=lf
