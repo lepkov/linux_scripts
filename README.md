@@ -76,13 +76,18 @@ A collection of lightweight Linux shell scripts and utilities for system adminis
   ```
 
 ### ubuntu_os_update.sh
-- **Description:** Comprehensive maintenance utility for Ubuntu systems that performs unattended updates for APT, Snap, Flatpak, firmware (`fwupdmgr`), and Docker Compose services, with cleanup and optional release upgrade support (`--release-upgrade`).
+- **Description:** Universal non-interactive OS refresh for apt-based hosts (Ubuntu, Debian, Kali and derivatives). Covers APT packages, Snap, Flatpak, Docker images, running Docker Compose stacks, rustup/pipx/npm toolchains, initramfs and GRUB. Every section is failure-isolated and timeout-bounded: a failing step is recorded and the run moves on to the next one, then a summary lists what succeeded, was skipped and failed. Nothing destructive happens by default — firmware flashing, `docker system prune` and the release upgrade are opt-in.
+- **Release upgrade:** on Ubuntu it calls `do-release-upgrade` (requires `--yes`); on Kali, which has no `do-release-upgrade`, it runs the rolling `apt dist-upgrade` after `kali-check-apt-sources`.
 - **Usage:**
   ```bash
-  sudo bash ubuntu_os_update.sh
-  # Or perform release upgrade:
-  sudo bash ubuntu_os_update.sh --release-upgrade
+  sudo ./ubuntu_os_update.sh                     # normal run
+  ./ubuntu_os_update.sh --dry-run                # plan only, no root, no changes
+  sudo ./ubuntu_os_update.sh --yes               # also update global npm packages
+  sudo ./ubuntu_os_update.sh --release-upgrade   # Ubuntu: next release (add --yes) / Kali: dist-upgrade
   ```
+- **Options:** `--dry-run`, `--yes`, `--firmware`, `--prune-docker`, `--release-upgrade`, `--no-user-tools`, `--user NAME`, `--timeout SEC`, `--keep N`, `-h/--help`.
+- **Exit codes:** `0` success, `1` some sections failed, `2` preconditions not met, `64` bad usage, `75` another run holds the lock, `130` interrupted by a signal.
+- **Logs:** `/var/log/ubuntu_os_update_YYYYmmdd_HHMMSS.log` (mode `0600`, the last 20 are kept).
 
 ### backup_and_delete_viruses/
 - **Description:** Remediation suite containing `backup_and_delete_viruses.sh` and `viruses.txt` designed to read malicious file paths, adjust permissions, isolate them into a directory tree, and package them into a timestamped `.tar.gz` quarantine archive before cleanup.
